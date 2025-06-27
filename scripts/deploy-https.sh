@@ -79,62 +79,177 @@ sed -i "s/your-email@example.com/$EMAIL/g" docker-compose-https.yml
 
 # Create initial nginx config for certificate acquisition
 echo -e "${YELLOW}🔒 Preparing for SSL certificate acquisition...${NC}"
+
+# Stop any existing containers first
+docker-compose -f docker-compose-https.yml down 2>/dev/null || true
+
+# Create a minimal nginx config for Let's Encrypt challenge
 cat > nginx/conf.d/initial.conf << EOF
 server {
-    listen 80;
+    listen 80 default_server;
     server_name $DOMAIN api.$DOMAIN n8n.$DOMAIN;
     
+    # Let's Encrypt challenge location
     location /.well-known/acme-challenge/ {
         root /var/www/certbot;
+        try_files \$uri =404;
     }
     
+    # Temporary response for other requests
     location / {
-        return 200 'OK';
+        return 200 'SSL certificate acquisition in progress';
         add_header Content-Type text/plain;
     }
 }
 EOF
 
 # Backup the main config temporarily
-mv nginx/conf.d/default.conf nginx/conf.d/default.conf.backup
+if [ -f "nginx/conf.d/default.conf" ]; then
+    mv nginx/conf.d/default.conf nginx/conf.d/default.conf.backup
+fi
+
+# Create a basic nginx.conf if it doesn't exist
+if [ ! -f "nginx/nginx.conf" ]; then
+    echo -e "${YELLOW}Creating basic nginx.conf...${NC}"
+    cat > nginx/nginx.conf << EOF
+events {
+    worker_connections 1024;
+}
+
+http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+    
+    sendfile on;
+    keepalive_timeout 65;
+    
+    # Rate limiting
+    limit_req_zone \$binary_remote_addr zone=ui:10m rate=10r/s;
+    limit_req_zone \$binary_remote_addr zone=api:10m rate=30r/s;
+    
+    include /etc/nginx/conf.d/*.conf;
+}
+EOF
+fi
 
 # Start nginx for certificate challenge
 echo -e "${YELLOW}🌐 Starting nginx for certificate acquisition...${NC}"
-docker-compose -f docker-compose-https.yml up -d nginx
 
-# Wait for nginx to start
-sleep 15
+# Create a minimal docker-compose for certificate acquisition
+cat > docker-compose-cert.yml << EOF
+version: '3.8'
+services:
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      - certbot_data:/var/www/certbot
+    restart: "no"
+
+volumes:
+  certbot_data:
+    driver: local
+EOF
+
+# Start only nginx for certificate challenge
+docker-compose -f docker-compose-cert.yml up -d
+
+# Wait for nginx to start and test it
+sleep 10
+echo -e "${BLUE}🔍 Testing nginx configuration...${NC}"
+
+# Test if nginx is responding
+if ! curl -s http://localhost/.well-known/acme-challenge/test 2>/dev/null; then
+    echo -e "${YELLOW}⚠️ Nginx test endpoint not responding, checking logs...${NC}"
+    docker-compose -f docker-compose-cert.yml logs nginx
+fi
+
+# Check domain DNS resolution
+echo -e "${BLUE}🔍 Checking DNS resolution for $DOMAIN...${NC}"
+RESOLVED_IP=$(dig +short $DOMAIN | tail -n1)
+CURRENT_IP=$(curl -s ifconfig.me 2>/dev/null || curl -s icanhazip.com 2>/dev/null)
+
+if [ -n "$RESOLVED_IP" ] && [ -n "$CURRENT_IP" ]; then
+    if [ "$RESOLVED_IP" != "$CURRENT_IP" ]; then
+        echo -e "${RED}⚠️ WARNING: DNS mismatch detected!${NC}"
+        echo -e "${RED}   Domain $DOMAIN resolves to: $RESOLVED_IP${NC}"
+        echo -e "${RED}   Server IP is: $CURRENT_IP${NC}"
+        echo -e "${YELLOW}   Please update your DNS records before continuing.${NC}"
+        echo -e "${YELLOW}   Would you like to continue anyway? (y/N)${NC}"
+        read -r continue_anyway
+        if [[ ! "$continue_anyway" =~ ^[Yy]$ ]]; then
+            echo -e "${RED}Aborting deployment. Please fix DNS first.${NC}"
+            docker-compose -f docker-compose-cert.yml down
+            rm -f docker-compose-cert.yml
+            exit 1
+        fi
+    else
+        echo -e "${GREEN}✅ DNS resolution correct: $DOMAIN -> $CURRENT_IP${NC}"
+    fi
+else
+    echo -e "${YELLOW}⚠️ Could not verify DNS resolution${NC}"
+fi
 
 # Get SSL certificates
 echo -e "${YELLOW}🔐 Acquiring SSL certificates...${NC}"
-docker-compose -f docker-compose-https.yml run --rm certbot certonly \
-    --webroot \
-    --webroot-path /var/www/certbot \
+
+# Use standalone certbot approach for better reliability
+docker-compose -f docker-compose-cert.yml down
+rm -f docker-compose-cert.yml
+
+# Try standalone method first (requires port 80 to be free)
+echo -e "${BLUE}Attempting standalone certificate acquisition...${NC}"
+docker run --rm \
+    -p 80:80 \
+    -v "$(pwd)/certbot_conf:/etc/letsencrypt" \
+    -v "$(pwd)/certbot_data:/var/www/certbot" \
+    certbot/certbot certonly \
+    --standalone \
     --email $EMAIL \
     --agree-tos \
     --no-eff-email \
     --force-renewal \
+    --preferred-challenges http \
     -d $DOMAIN \
     -d api.$DOMAIN \
     -d n8n.$DOMAIN
 
 # Check if certificates were created successfully
-if [ ! -f "/var/lib/docker/volumes/$(docker-compose -f docker-compose-https.yml config | grep certbot_conf | awk '{print $2}')/_data/live/$DOMAIN/fullchain.pem" ]; then
+if [ -d "certbot_conf/live/$DOMAIN" ] && [ -f "certbot_conf/live/$DOMAIN/fullchain.pem" ]; then
+    echo -e "${GREEN}✅ SSL certificates acquired successfully!${NC}"
+else
     echo -e "${RED}❌ Certificate acquisition failed!${NC}"
-    echo -e "${YELLOW}Please check:${NC}"
-    echo -e "${YELLOW}1. Domain DNS points to this server${NC}"
-    echo -e "${YELLOW}2. Ports 80/443 are accessible${NC}"
-    echo -e "${YELLOW}3. No other services using ports 80/443${NC}"
+    echo -e "${YELLOW}Common issues and solutions:${NC}"
+    echo -e "${YELLOW}1. DNS: Ensure $DOMAIN points to this server's IP ($CURRENT_IP)${NC}"
+    echo -e "${YELLOW}2. Firewall: Ensure port 80 is open and accessible from internet${NC}"
+    echo -e "${YELLOW}3. Domain: Verify domain is properly registered and configured${NC}"
+    echo -e "${YELLOW}4. Cloud: Check cloud provider firewall allows HTTP traffic${NC}"
+    echo ""
+    echo -e "${BLUE}To debug further:${NC}"
+    echo -e "${BLUE}  - Test domain access: curl -v http://$DOMAIN${NC}"
+    echo -e "${BLUE}  - Check DNS: dig $DOMAIN${NC}"
+    echo -e "${BLUE}  - Verify firewall: sudo ufw status${NC}"
+    echo ""
     exit 1
 fi
 
 # Restore main nginx config
 echo -e "${YELLOW}🔧 Configuring nginx with SSL...${NC}"
-rm nginx/conf.d/initial.conf
-mv nginx/conf.d/default.conf.backup nginx/conf.d/default.conf
+rm -f nginx/conf.d/initial.conf
+if [ -f "nginx/conf.d/default.conf.backup" ]; then
+    mv nginx/conf.d/default.conf.backup nginx/conf.d/default.conf
+fi
 
-# Stop nginx temporarily
-docker-compose -f docker-compose-https.yml down
+# Update docker-compose to use local certificate volumes
+echo -e "${BLUE}Updating docker-compose configuration...${NC}"
+sed -i "s|certbot_conf:/etc/letsencrypt|$(pwd)/certbot_conf:/etc/letsencrypt|g" docker-compose-https.yml 2>/dev/null || true
+sed -i "s|certbot_data:/var/www/certbot|$(pwd)/certbot_data:/var/www/certbot|g" docker-compose-https.yml 2>/dev/null || true
+
+# Stop any running containers
+docker-compose -f docker-compose-https.yml down 2>/dev/null || true
 
 # Check if .env file exists
 if [ ! -f ".env" ]; then

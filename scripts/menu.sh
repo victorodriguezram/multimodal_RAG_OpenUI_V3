@@ -45,10 +45,11 @@ show_menu() {
     echo " 14) Fix HTTP Deployment         - Fix external access issues for HTTP"
     echo " 15) Setup GCP Firewall          - Configure Google Cloud firewall rules"
     echo " 16) Troubleshoot Deployment     - Comprehensive deployment diagnostics"
+    echo " 17) Check DNS & Domain          - Verify domain DNS configuration"
     echo ""
     echo -e "${BLUE}💡 INFORMATION:${NC}"
-    echo " 17) Show All Scripts            - List all available scripts"
-    echo " 18) Help & Documentation       - Quick help guide"
+    echo " 18) Show All Scripts            - List all available scripts"
+    echo " 19) Help & Documentation       - Quick help guide"
     echo ""
     echo "  0) Exit"
     echo ""
@@ -130,7 +131,7 @@ while true; do
     
     show_menu
     
-    read -p "Enter your choice (0-18): " choice
+    read -p "Enter your choice (0-19): " choice
     
     case $choice in
         1)
@@ -212,9 +213,27 @@ while true; do
             run_script "troubleshoot-deployment.sh" "Troubleshoot Deployment"
             ;;
         17)
-            show_scripts
+            echo ""
+            echo -e "${YELLOW}🔍 DNS & Domain Check${NC}"
+            echo ""
+            read -p "Enter your domain name (e.g., example.com): " domain
+            
+            if [ -z "$domain" ]; then
+                echo -e "${RED}❌ Domain name is required${NC}"
+                sleep 3
+            else
+                echo ""
+                echo -e "${YELLOW}🔧 Checking DNS configuration...${NC}"
+                chmod +x scripts/check-dns.sh
+                ./scripts/check-dns.sh "$domain"
+                echo ""
+                read -p "Press Enter to return to menu..."
+            fi
             ;;
         18)
+            show_scripts
+            ;;
+        19)
             show_help
             ;;
         0)

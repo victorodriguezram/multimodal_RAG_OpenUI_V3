@@ -195,6 +195,7 @@ chmod +x scripts/menu.sh
 - **fix-http-deployment.sh** - Fix External Access Issues for HTTP
 - **setup-gcp-firewall.sh** - Configure Google Cloud Firewall Rules
 - **troubleshoot-deployment.sh** - Comprehensive Deployment Diagnostics
+- **check-dns.sh** - Verify Domain DNS Configuration
 
 #### 📋 Management:
 - **menu.sh** - Interactive Script Manager
@@ -893,3 +894,44 @@ mkdir -p nginx/conf.d
 ./scripts/menu.sh
 # Choose option 8 (Deploy HTTPS with SSL)
 ```
+
+### Problem: SSL Certificate Acquisition Failed
+
+**Error**: `Certbot failed to authenticate some domains (authenticator: webroot)`
+
+**Common Causes & Solutions**:
+
+1. **DNS Mismatch**: Domain doesn't point to your server
+   ```bash
+   # Check DNS configuration
+   ./scripts/menu.sh
+   # Choose option 17 (Check DNS & Domain)
+   ```
+
+2. **Cloud Provider Firewall**: Ports 80/443 blocked
+   ```bash
+   # For GCP users
+   ./scripts/menu.sh
+   # Choose option 15 (Setup GCP Firewall)
+   ```
+
+3. **Domain Not Accessible**: Network or firewall issues
+   ```bash
+   # Check comprehensive diagnostics
+   ./scripts/menu.sh
+   # Choose option 16 (Troubleshoot Deployment)
+   ```
+
+**Required DNS Configuration**:
+Your domain DNS must point to your server's IP address BEFORE running HTTPS deployment:
+```
+Type: A    Name: @                    Value: YOUR_SERVER_IP
+Type: A    Name: api                  Value: YOUR_SERVER_IP  
+Type: A    Name: n8n                  Value: YOUR_SERVER_IP
+```
+
+**Verification Steps**:
+1. Check your server's public IP: `curl ifconfig.me`
+2. Verify DNS: `dig automatizatek.com`
+3. Ensure they match before attempting HTTPS deployment
+4. Test HTTP connectivity: `curl -v http://automatizatek.com`
