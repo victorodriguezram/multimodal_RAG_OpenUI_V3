@@ -59,6 +59,21 @@ ufw --force enable
 
 # Update nginx configuration with actual domain
 echo -e "${YELLOW}⚙️ Updating nginx configuration...${NC}"
+# Check if the nginx conf.d directory exists and create if needed
+if [ ! -d "nginx/conf.d" ]; then
+    mkdir -p nginx/conf.d
+    echo -e "${YELLOW}Created nginx/conf.d directory${NC}"
+fi
+
+# Check if default.conf exists, if not create it from template
+if [ ! -f "nginx/conf.d/default.conf" ]; then
+    echo -e "${YELLOW}Creating nginx configuration file...${NC}"
+    cp nginx/conf.d/default.conf.template nginx/conf.d/default.conf 2>/dev/null || {
+        echo -e "${RED}Error: nginx/conf.d/default.conf not found. Please ensure it exists.${NC}"
+        exit 1
+    }
+fi
+
 sed -i "s/your-domain.com/$DOMAIN/g" nginx/conf.d/default.conf
 sed -i "s/your-email@example.com/$EMAIL/g" docker-compose-https.yml
 

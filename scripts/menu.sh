@@ -42,10 +42,13 @@ show_menu() {
     echo " 11) Targeted Cleanup            - Remove only project containers/images"
     echo " 12) Full Cleanup                - Remove all project resources"
     echo " 13) Nuclear Cleanup             - Remove ALL Docker resources (⚠️  WARNING)"
+    echo " 14) Fix HTTP Deployment         - Fix external access issues for HTTP"
+    echo " 15) Setup GCP Firewall          - Configure Google Cloud firewall rules"
+    echo " 16) Troubleshoot Deployment     - Comprehensive deployment diagnostics"
     echo ""
     echo -e "${BLUE}💡 INFORMATION:${NC}"
-    echo " 14) Show All Scripts            - List all available scripts"
-    echo " 15) Help & Documentation       - Quick help guide"
+    echo " 17) Show All Scripts            - List all available scripts"
+    echo " 18) Help & Documentation       - Quick help guide"
     echo ""
     echo "  0) Exit"
     echo ""
@@ -106,6 +109,9 @@ show_help() {
     echo "  - Use option 11 for safe cleanup"
     echo "  - Use option 12 for complete reset"
     echo "  - Use option 13 only if system is broken"
+    echo "  - Use option 14 to fix HTTP deployment issues"
+    echo "  - Use option 15 to configure GCP firewall"
+    echo "  - Use option 16 for comprehensive troubleshooting"
     echo ""
     echo -e "${BLUE}📖 Documentation:${NC}"
     echo "  - Check README_DOCKER.md for detailed instructions"
@@ -124,7 +130,7 @@ while true; do
     
     show_menu
     
-    read -p "Enter your choice (0-15): " choice
+    read -p "Enter your choice (0-18): " choice
     
     case $choice in
         1)
@@ -197,9 +203,18 @@ while true; do
             fi
             ;;
         14)
-            show_scripts
+            run_script "fix-http-deployment.sh" "Fix HTTP Deployment Issues"
             ;;
         15)
+            run_script "setup-gcp-firewall.sh" "Setup GCP Firewall Rules"
+            ;;
+        16)
+            run_script "troubleshoot-deployment.sh" "Troubleshoot Deployment"
+            ;;
+        17)
+            show_scripts
+            ;;
+        18)
             show_help
             ;;
         0)

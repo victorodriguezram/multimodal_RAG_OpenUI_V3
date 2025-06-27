@@ -13,6 +13,7 @@ services:
       - STREAMLIT_SERVER_HEADLESS=true
       - STREAMLIT_SERVER_ENABLE_CORS=false
       - STREAMLIT_SERVER_ENABLE_XSRF_PROTECTION=false
+      - STREAMLIT_SERVER_ADDRESS=0.0.0.0
     volumes:
       - rag_data:/app/data
       - uploaded_files:/app/uploads

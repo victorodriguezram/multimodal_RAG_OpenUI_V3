@@ -192,6 +192,9 @@ chmod +x scripts/menu.sh
 - **cleanup-targeted.sh** - Safe Project Cleanup
 - **cleanup-full.sh** - Full Project Resource Removal
 - **cleanup-nuclear.sh** - ⚠️ Complete Docker System Cleanup
+- **fix-http-deployment.sh** - Fix External Access Issues for HTTP
+- **setup-gcp-firewall.sh** - Configure Google Cloud Firewall Rules
+- **troubleshoot-deployment.sh** - Comprehensive Deployment Diagnostics
 
 #### 📋 Management:
 - **menu.sh** - Interactive Script Manager
@@ -309,6 +312,11 @@ docker-compose logs -f
 - **API Documentation**: http://localhost:8000/docs or http://your-server-ip:8000/docs
 - **N8N Interface**: http://localhost:5678 or http://your-server-ip:5678
 - **API Health Check**: http://localhost:8000/health or http://your-server-ip:8000/health
+
+**⚠️ Important for External Access:**
+- Ensure your cloud provider firewall allows ports 8501, 8000, and 5678
+- For GCP users: Run `./scripts/setup-gcp-firewall.sh` to configure firewall rules
+- If external access fails, run `./scripts/troubleshoot-deployment.sh` for diagnostics
 
 #### HTTPS Deployment (Production):
 - **Streamlit UI**: https://your-domain.com
@@ -826,35 +834,62 @@ docker rmi multimodal_rag_openui_v2-multimodal-rag
 docker-compose build --no-cache
 docker-compose up -d
 ```
-```
 
-### Health Check Commands
+## 🔧 Troubleshooting External Access Issues
+
+### Problem: Streamlit Not Accessible from External IP
+
+If you can access N8N at `http://your-ip:5678` but NOT Streamlit at `http://your-ip:8501`, this indicates a firewall configuration issue.
+
+#### Quick Fixes:
+
+**Option 1: Use the automated fix script (Recommended)**
 ```bash
-# Full system health check
-docker-compose ps
-curl -s http://localhost:8000/health
-curl -s http://localhost:8000/status
+./scripts/menu.sh
+# Choose option 14 (Fix HTTP Deployment)
 ```
 
-## 🔒 Security Considerations
+**Option 2: Manual firewall configuration**
+```bash
+# For Ubuntu/Debian servers
+sudo ufw allow 8501/tcp
+sudo ufw allow 8000/tcp
+sudo ufw allow 5678/tcp
 
-### Basic Security Hardening
+# Check firewall status
+sudo ufw status
+```
 
-1. **Change default N8N credentials**
-2. **Generate strong encryption keys**
-3. **Implement API authentication for production**
-4. **Set up HTTPS/TLS**
-5. **Configure firewall rules**
-6. **Regular security updates**
+**Option 3: For Google Cloud Platform users**
+```bash
+./scripts/menu.sh
+# Choose option 15 (Setup GCP Firewall)
+```
 
-### API Key Management
-- Never commit API keys to version control
-- Use environment variables for all sensitive data
-- Rotate API keys regularly
-- Monitor API usage for anomalies
+#### Comprehensive Diagnostics:
+```bash
+./scripts/menu.sh
+# Choose option 16 (Troubleshoot Deployment)
+```
 
----
+This will check:
+- Docker and container status
+- Port availability and binding
+- Firewall configuration
+- External connectivity
+- Configuration file validity
 
-**🎯 Success Criteria**: The deployment is successful when you can upload a PDF document via the web interface, query it through both the UI and API, and create N8N workflows that interact with the RAG system APIs.
+### Problem: HTTPS Deployment Error
 
-**📊 System Ready**: Your multimodal RAG system is now ready for production use with full N8N integration capabilities!
+**Error**: `sed: can't read nginx/conf.d/default.conf: No such file or directory`
+
+**Solution**: This occurs when the nginx configuration directory structure is incomplete. The updated deployment script now automatically creates missing directories and files.
+
+```bash
+# Ensure nginx directory structure exists
+mkdir -p nginx/conf.d
+
+# Run HTTPS deployment again
+./scripts/menu.sh
+# Choose option 8 (Deploy HTTPS with SSL)
+```
